@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String          @id @default(cuid())
+  email        String          @unique
+  passwordHash String
+  createdAt    DateTime        @default(now())
+  accounts     ShopeeAccount[]
+  creators     Creator[]
+  videos       Video[]
+}
+
+model ShopeeAccount {
+  id         String   @id @default(cuid())
+  userId     String
+  username   String
+  dailyLimit Int
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model Creator {
+  id             String   @id @default(cuid())
+  userId         String
+  tiktokUsername String
+  autoCheck      Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  lastCheckedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model Video {
+  id              String   @id @default(cuid())
+  userId          String
+  creatorId       String?
+  sourceUrl       String
+  status          String   @default("downloaded")
+  watermarkRemoved Boolean @default(true)
+  importedAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([creatorId])
+}
