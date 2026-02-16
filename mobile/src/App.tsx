@@ -105,6 +105,14 @@ export default function App() {
     [token],
   );
 
+  function buildAuthHeaders(tokenOverride?: string) {
+    const activeToken = tokenOverride ?? token;
+    return {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${activeToken}`,
+    };
+  }
+
   async function callApi(path: string, options?: RequestInit) {
     const res = await fetch(`${baseUrl}${path}`, options);
     const body = await res.json().catch(() => ({}));
@@ -112,8 +120,14 @@ export default function App() {
     return body;
   }
 
-  async function hydrateCoreData() {
-    await Promise.all([loadAccounts(), loadCreators(), loadVideos(), loadReviewQueue(), loadDashboard()]);
+  async function hydrateCoreData(tokenOverride?: string) {
+    await Promise.all([
+      loadAccounts(tokenOverride),
+      loadCreators(tokenOverride),
+      loadVideos(tokenOverride),
+      loadReviewQueue(tokenOverride),
+      loadDashboard(tokenOverride),
+    ]);
   }
 
   async function onRegister() {
@@ -128,7 +142,7 @@ export default function App() {
       setUser(data.user);
       setTab("accounts");
       Alert.alert("Success", "Registered and logged in.");
-      await hydrateCoreData();
+      await hydrateCoreData(data.token);
     } catch (e) {
       Alert.alert("Register failed", extractError((e as Error).message));
     } finally {
@@ -148,7 +162,7 @@ export default function App() {
       setUser(data.user);
       setTab("accounts");
       Alert.alert("Success", "Logged in.");
-      await hydrateCoreData();
+      await hydrateCoreData(data.token);
     } catch (e) {
       Alert.alert("Login failed", extractError((e as Error).message));
     } finally {
@@ -156,10 +170,10 @@ export default function App() {
     }
   }
 
-  async function loadAccounts() {
-    if (!isLoggedIn) return;
+  async function loadAccounts(tokenOverride?: string) {
+    if (!tokenOverride && !isLoggedIn) return;
     try {
-      const data = await callApi("/accounts", { headers: authHeaders });
+      const data = await callApi("/accounts", { headers: buildAuthHeaders(tokenOverride) });
       setAccounts(data);
     } catch (e) {
       Alert.alert("Load accounts failed", extractError((e as Error).message));
@@ -177,7 +191,7 @@ export default function App() {
     try {
       await callApi("/accounts", {
         method: "POST",
-        headers: authHeaders,
+        headers: buildAuthHeaders(),
         body: JSON.stringify({ username: accountUsername, dailyLimit: limit, active: accountActive }),
       });
       setAccountUsername("");
@@ -188,10 +202,10 @@ export default function App() {
     }
   }
 
-  async function loadCreators() {
-    if (!isLoggedIn) return;
+  async function loadCreators(tokenOverride?: string) {
+    if (!tokenOverride && !isLoggedIn) return;
     try {
-      const data = await callApi("/creators", { headers: authHeaders });
+      const data = await callApi("/creators", { headers: buildAuthHeaders(tokenOverride) });
       setCreators(data);
     } catch (e) {
       Alert.alert("Load creators failed", extractError((e as Error).message));
@@ -208,7 +222,7 @@ export default function App() {
     try {
       await callApi("/creators", {
         method: "POST",
-        headers: authHeaders,
+        headers: buildAuthHeaders(),
         body: JSON.stringify({ tiktokUsername: creatorUsername, autoCheck: creatorAutoCheck }),
       });
       setCreatorUsername("");
@@ -223,7 +237,7 @@ export default function App() {
     try {
       const data = await callApi(`/creators/${creatorId}/check`, {
         method: "POST",
-        headers: authHeaders,
+        headers: buildAuthHeaders(),
       });
       Alert.alert("Creator checked", `${data.videosImported} videos imported`);
       await loadCreators();
@@ -235,10 +249,10 @@ export default function App() {
     }
   }
 
-  async function loadVideos() {
-    if (!isLoggedIn) return;
+  async function loadVideos(tokenOverride?: string) {
+    if (!tokenOverride && !isLoggedIn) return;
     try {
-      const data = await callApi("/videos", { headers: authHeaders });
+      const data = await callApi("/videos", { headers: buildAuthHeaders(tokenOverride) });
       setVideos(data);
     } catch (e) {
       Alert.alert("Load videos failed", extractError((e as Error).message));
@@ -255,7 +269,7 @@ export default function App() {
     try {
       await callApi("/videos/intake", {
         method: "POST",
-        headers: authHeaders,
+        headers: buildAuthHeaders(),
         body: JSON.stringify({ sourceUrl: videoUrl }),
       });
       setVideoUrl("");
@@ -267,10 +281,10 @@ export default function App() {
     }
   }
 
-  async function loadReviewQueue() {
-    if (!isLoggedIn) return;
+  async function loadReviewQueue(tokenOverride?: string) {
+    if (!tokenOverride && !isLoggedIn) return;
     try {
-      const data = await callApi("/videos/review-queue", { headers: authHeaders });
+      const data = await callApi("/videos/review-queue", { headers: buildAuthHeaders(tokenOverride) });
       setReviewQueue(data);
     } catch (e) {
       Alert.alert("Review queue failed", extractError((e as Error).message));
@@ -281,7 +295,7 @@ export default function App() {
     try {
       await callApi(`/videos/${videoId}/confirm-match`, {
         method: "POST",
-        headers: authHeaders,
+        headers: buildAuthHeaders(),
         body: JSON.stringify({}),
       });
       await loadVideos();
@@ -296,7 +310,7 @@ export default function App() {
     try {
       await callApi(`/videos/${videoId}/reanalyze`, {
         method: "POST",
-        headers: authHeaders,
+        headers: buildAuthHeaders(),
       });
       await loadVideos();
       await loadReviewQueue();
@@ -310,7 +324,7 @@ export default function App() {
     try {
       const data = await callApi(`/videos/${videoId}/post`, {
         method: "POST",
-        headers: authHeaders,
+        headers: buildAuthHeaders(),
       });
       Alert.alert("Posted", data.message);
       await loadVideos();
@@ -321,10 +335,10 @@ export default function App() {
     }
   }
 
-  async function loadDashboard() {
-    if (!isLoggedIn) return;
+  async function loadDashboard(tokenOverride?: string) {
+    if (!tokenOverride && !isLoggedIn) return;
     try {
-      const data = await callApi("/dashboard/summary", { headers: authHeaders });
+      const data = await callApi("/dashboard/summary", { headers: buildAuthHeaders(tokenOverride) });
       setDashboard(data);
     } catch (e) {
       Alert.alert("Dashboard failed", extractError((e as Error).message));
