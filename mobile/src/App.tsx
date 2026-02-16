@@ -13,6 +13,14 @@ import {
 } from "react-native";
 
 type User = { id: string; email: string };
+type ProductMatch = {
+  id: string;
+  productName: string;
+  category: string;
+  confidence: number;
+  commission: number;
+  shopeeUrl: string;
+};
 type Account = { id: string; username: string; dailyLimit: number; active: boolean };
 type Creator = {
   id: string;
@@ -26,9 +34,36 @@ type Video = {
   status: string;
   watermarkRemoved: boolean;
   importedAt?: string;
+  productMatch?: ProductMatch | null;
+};
+type DashboardSummary = {
+  totals: {
+    totalVideos: number;
+    matchedVideos: number;
+    needsReview: number;
+    postsToday: number;
+    profitTotal: number;
+  };
+  accountStats: Array<{
+    accountId: string;
+    username: string;
+    active: boolean;
+    dailyLimit: number;
+    postsToday: number;
+    profitTotal: number;
+  }>;
+  recentPosts: Array<{
+    id: string;
+    postedAt: string;
+    account: string;
+    product: string;
+    confidence: number | null;
+    affiliateLink: string;
+    estimatedProfit: number;
+  }>;
 };
 
-type Tab = "auth" | "accounts" | "creators" | "videos";
+type Tab = "auth" | "accounts" | "creators" | "videos" | "review" | "dashboard";
 
 function extractError(message: unknown): string {
   if (typeof message === "string") return message;
@@ -57,6 +92,8 @@ export default function App() {
 
   const [videoUrl, setVideoUrl] = useState("https://www.tiktok.com/@test/video/123456789");
   const [videos, setVideos] = useState<Video[]>([]);
+  const [reviewQueue, setReviewQueue] = useState<Video[]>([]);
+  const [dashboard, setDashboard] = useState<DashboardSummary | null>(null);
 
   const isLoggedIn = Boolean(token);
 
@@ -75,6 +112,10 @@ export default function App() {
     return body;
   }
 
+  async function hydrateCoreData() {
+    await Promise.all([loadAccounts(), loadCreators(), loadVideos(), loadReviewQueue(), loadDashboard()]);
+  }
+
   async function onRegister() {
     try {
       setAuthLoading(true);
@@ -87,6 +128,7 @@ export default function App() {
       setUser(data.user);
       setTab("accounts");
       Alert.alert("Success", "Registered and logged in.");
+      await hydrateCoreData();
     } catch (e) {
       Alert.alert("Register failed", extractError((e as Error).message));
     } finally {
@@ -106,6 +148,7 @@ export default function App() {
       setUser(data.user);
       setTab("accounts");
       Alert.alert("Success", "Logged in.");
+      await hydrateCoreData();
     } catch (e) {
       Alert.alert("Login failed", extractError((e as Error).message));
     } finally {
@@ -139,6 +182,7 @@ export default function App() {
       });
       setAccountUsername("");
       await loadAccounts();
+      await loadDashboard();
     } catch (e) {
       Alert.alert("Add account failed", extractError((e as Error).message));
     }
@@ -184,6 +228,8 @@ export default function App() {
       Alert.alert("Creator checked", `${data.videosImported} videos imported`);
       await loadCreators();
       await loadVideos();
+      await loadReviewQueue();
+      await loadDashboard();
     } catch (e) {
       Alert.alert("Check creator failed", extractError((e as Error).message));
     }
@@ -214,10 +260,78 @@ export default function App() {
       });
       setVideoUrl("");
       await loadVideos();
+      await loadReviewQueue();
+      await loadDashboard();
     } catch (e) {
       Alert.alert("Intake failed", extractError((e as Error).message));
     }
   }
+
+  async function loadReviewQueue() {
+    if (!isLoggedIn) return;
+    try {
+      const data = await callApi("/videos/review-queue", { headers: authHeaders });
+      setReviewQueue(data);
+    } catch (e) {
+      Alert.alert("Review queue failed", extractError((e as Error).message));
+    }
+  }
+
+  async function confirmMatch(videoId: string) {
+    try {
+      await callApi(`/videos/${videoId}/confirm-match`, {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({}),
+      });
+      await loadVideos();
+      await loadReviewQueue();
+      await loadDashboard();
+    } catch (e) {
+      Alert.alert("Confirm failed", extractError((e as Error).message));
+    }
+  }
+
+  async function reanalyze(videoId: string) {
+    try {
+      await callApi(`/videos/${videoId}/reanalyze`, {
+        method: "POST",
+        headers: authHeaders,
+      });
+      await loadVideos();
+      await loadReviewQueue();
+      await loadDashboard();
+    } catch (e) {
+      Alert.alert("Re-analyze failed", extractError((e as Error).message));
+    }
+  }
+
+  async function postVideo(videoId: string) {
+    try {
+      const data = await callApi(`/videos/${videoId}/post`, {
+        method: "POST",
+        headers: authHeaders,
+      });
+      Alert.alert("Posted", data.message);
+      await loadVideos();
+      await loadReviewQueue();
+      await loadDashboard();
+    } catch (e) {
+      Alert.alert("Post failed", extractError((e as Error).message));
+    }
+  }
+
+  async function loadDashboard() {
+    if (!isLoggedIn) return;
+    try {
+      const data = await callApi("/dashboard/summary", { headers: authHeaders });
+      setDashboard(data);
+    } catch (e) {
+      Alert.alert("Dashboard failed", extractError((e as Error).message));
+    }
+  }
+
+  const tabs: Tab[] = ["auth", "accounts", "creators", "videos", "review", "dashboard"];
 
   return (
     <SafeAreaView style={styles.container}>
@@ -231,7 +345,7 @@ export default function App() {
         </View>
 
         <View style={styles.tabs}>
-          {(["auth", "accounts", "creators", "videos"] as Tab[]).map((item) => (
+          {tabs.map((item) => (
             <Pressable key={item} onPress={() => setTab(item)} style={[styles.tab, tab === item && styles.activeTab]}>
               <Text style={[styles.tabText, tab === item && styles.activeTabText]}>{item.toUpperCase()}</Text>
             </Pressable>
@@ -258,20 +372,8 @@ export default function App() {
         {tab === "accounts" && (
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>2) Shopee Accounts</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Account username"
-              value={accountUsername}
-              onChangeText={setAccountUsername}
-              autoCapitalize="none"
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Daily limit"
-              keyboardType="numeric"
-              value={dailyLimit}
-              onChangeText={setDailyLimit}
-            />
+            <TextInput style={styles.input} placeholder="Account username" value={accountUsername} onChangeText={setAccountUsername} autoCapitalize="none" />
+            <TextInput style={styles.input} placeholder="Daily limit" keyboardType="numeric" value={dailyLimit} onChangeText={setDailyLimit} />
             <View style={styles.switchRow}>
               <Text>Active</Text>
               <Switch value={accountActive} onValueChange={setAccountActive} />
@@ -303,13 +405,7 @@ export default function App() {
         {tab === "creators" && (
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>3) Creator Monitoring</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="TikTok username"
-              value={creatorUsername}
-              onChangeText={setCreatorUsername}
-              autoCapitalize="none"
-            />
+            <TextInput style={styles.input} placeholder="TikTok username" value={creatorUsername} onChangeText={setCreatorUsername} autoCapitalize="none" />
             <View style={styles.switchRow}>
               <Text>Auto-check</Text>
               <Switch value={creatorAutoCheck} onValueChange={setCreatorAutoCheck} />
@@ -343,7 +439,7 @@ export default function App() {
 
         {tab === "videos" && (
           <View style={styles.card}>
-            <Text style={styles.sectionTitle}>4) Video Intake</Text>
+            <Text style={styles.sectionTitle}>4) Videos + Posting</Text>
             <TextInput style={styles.input} placeholder="TikTok URL" value={videoUrl} onChangeText={setVideoUrl} autoCapitalize="none" />
             <View style={styles.rowGap}>
               <Pressable style={styles.button} onPress={intakeVideo}>
@@ -361,13 +457,86 @@ export default function App() {
               ListEmptyComponent={<Text style={styles.helper}>No videos yet.</Text>}
               renderItem={({ item }) => (
                 <View style={styles.listItem}>
-                  <Text numberOfLines={1} style={styles.itemTitle}>
-                    {item.sourceUrl}
-                  </Text>
-                  <Text style={styles.helper}>Status: {item.status} • Watermark removed: {String(item.watermarkRemoved)}</Text>
+                  <Text numberOfLines={1} style={styles.itemTitle}>{item.sourceUrl}</Text>
+                  <Text style={styles.helper}>Status: {item.status} • Product: {item.productMatch?.productName ?? "Pending"}</Text>
+                  <Text style={styles.helper}>Confidence: {item.productMatch?.confidence ?? "-"}% • Commission: {item.productMatch?.commission ?? "-"}%</Text>
+                  {item.status === "ready" && (
+                    <Pressable style={styles.smallButton} onPress={() => postVideo(item.id)}>
+                      <Text style={styles.smallButtonText}>Post Now</Text>
+                    </Pressable>
+                  )}
                 </View>
               )}
             />
+          </View>
+        )}
+
+        {tab === "review" && (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>5) Review Queue</Text>
+            <Pressable style={styles.buttonAlt} onPress={loadReviewQueue}>
+              <Text style={styles.buttonAltText}>Refresh Queue</Text>
+            </Pressable>
+
+            <FlatList
+              data={reviewQueue}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+              ListEmptyComponent={<Text style={styles.helper}>No low-confidence videos. ✅</Text>}
+              renderItem={({ item }) => (
+                <View style={styles.listItem}>
+                  <Text numberOfLines={1} style={styles.itemTitle}>{item.productMatch?.productName ?? "Unknown Product"}</Text>
+                  <Text style={styles.helper}>Confidence: {item.productMatch?.confidence ?? "-"}%</Text>
+                  <View style={styles.rowGap}>
+                    <Pressable style={styles.smallButton} onPress={() => confirmMatch(item.id)}>
+                      <Text style={styles.smallButtonText}>Confirm Match</Text>
+                    </Pressable>
+                    <Pressable style={styles.smallButtonWarn} onPress={() => reanalyze(item.id)}>
+                      <Text style={styles.smallButtonWarnText}>Re-analyze</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              )}
+            />
+          </View>
+        )}
+
+        {tab === "dashboard" && (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>6) Dashboard</Text>
+            <Pressable style={styles.buttonAlt} onPress={loadDashboard}>
+              <Text style={styles.buttonAltText}>Refresh Dashboard</Text>
+            </Pressable>
+
+            {dashboard ? (
+              <View style={{ gap: 8 }}>
+                <Text style={styles.helper}>Total Videos: {dashboard.totals.totalVideos}</Text>
+                <Text style={styles.helper}>Matched Videos: {dashboard.totals.matchedVideos}</Text>
+                <Text style={styles.helper}>Needs Review: {dashboard.totals.needsReview}</Text>
+                <Text style={styles.helper}>Posts Today: {dashboard.totals.postsToday}</Text>
+                <Text style={styles.helper}>Estimated Profit Total: ${dashboard.totals.profitTotal}</Text>
+
+                <Text style={styles.itemTitle}>Account Stats</Text>
+                {dashboard.accountStats.map((item) => (
+                  <Text key={item.accountId} style={styles.helper}>
+                    @{item.username} • {item.postsToday}/{item.dailyLimit} today • ${item.profitTotal}
+                  </Text>
+                ))}
+
+                <Text style={styles.itemTitle}>Recent Posts</Text>
+                {dashboard.recentPosts.length === 0 ? (
+                  <Text style={styles.helper}>No posts yet.</Text>
+                ) : (
+                  dashboard.recentPosts.map((post) => (
+                    <Text key={post.id} style={styles.helper}>
+                      @{post.account} posted {post.product} (${post.estimatedProfit})
+                    </Text>
+                  ))
+                )}
+              </View>
+            ) : (
+              <Text style={styles.helper}>No dashboard data yet.</Text>
+            )}
           </View>
         )}
       </ScrollView>
@@ -407,7 +576,7 @@ const styles = StyleSheet.create({
   switchRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   button: { backgroundColor: "#0f172a", borderRadius: 8, paddingVertical: 10, paddingHorizontal: 12 },
   buttonText: { color: "#fff", fontWeight: "700" },
-  buttonAlt: { backgroundColor: "#eef2ff", borderRadius: 8, paddingVertical: 10, paddingHorizontal: 12 },
+  buttonAlt: { backgroundColor: "#eef2ff", borderRadius: 8, paddingVertical: 10, paddingHorizontal: 12, alignSelf: "flex-start" },
   buttonAltText: { color: "#3730a3", fontWeight: "700" },
   listItem: { borderWidth: 1, borderColor: "#e5e7eb", borderRadius: 8, padding: 10, gap: 4 },
   itemTitle: { fontWeight: "700", color: "#111827" },
@@ -420,4 +589,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   smallButtonText: { color: "#1d4ed8", fontWeight: "700", fontSize: 12 },
+  smallButtonWarn: {
+    alignSelf: "flex-start",
+    backgroundColor: "#fee2e2",
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    marginTop: 4,
+  },
+  smallButtonWarnText: { color: "#b91c1c", fontWeight: "700", fontSize: 12 },
 });

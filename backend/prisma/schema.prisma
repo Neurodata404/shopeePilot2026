@@ -15,15 +15,17 @@ model User {
   accounts     ShopeeAccount[]
   creators     Creator[]
   videos       Video[]
+  videoPosts   VideoPost[]
 }
 
 model ShopeeAccount {
-  id         String   @id @default(cuid())
+  id         String      @id @default(cuid())
   userId     String
   username   String
   dailyLimit Int
-  active     Boolean  @default(true)
-  createdAt  DateTime @default(now())
+  active     Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+  videoPosts VideoPost[]
 
   user User @relation(fields: [userId], references: [id])
 
@@ -38,22 +40,63 @@ model Creator {
   createdAt      DateTime @default(now())
   lastCheckedAt  DateTime?
 
-  user User @relation(fields: [userId], references: [id])
+  user User   @relation(fields: [userId], references: [id])
+  videos Video[]
 
   @@index([userId])
 }
 
 model Video {
-  id              String   @id @default(cuid())
-  userId          String
-  creatorId       String?
-  sourceUrl       String
-  status          String   @default("downloaded")
-  watermarkRemoved Boolean @default(true)
-  importedAt      DateTime @default(now())
+  id               String       @id @default(cuid())
+  userId           String
+  creatorId        String?
+  sourceUrl        String
+  status           String       @default("downloaded")
+  watermarkRemoved Boolean      @default(true)
+  importedAt       DateTime     @default(now())
 
-  user User @relation(fields: [userId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+  creator      Creator?     @relation(fields: [creatorId], references: [id])
+  productMatch ProductMatch?
+  posts        VideoPost[]
 
   @@index([userId])
   @@index([creatorId])
+}
+
+model ProductMatch {
+  id          String   @id @default(cuid())
+  userId      String
+  videoId     String   @unique
+  productName String
+  category    String
+  confidence  Int
+  commission  Float
+  shopeeUrl   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  video Video @relation(fields: [videoId], references: [id])
+
+  @@index([userId])
+  @@index([confidence])
+}
+
+model VideoPost {
+  id              String   @id @default(cuid())
+  userId          String
+  videoId         String
+  shopeeAccountId String
+  caption         String
+  affiliateLink   String
+  estimatedProfit Float    @default(0)
+  postedAt        DateTime @default(now())
+
+  user          User          @relation(fields: [userId], references: [id])
+  video         Video          @relation(fields: [videoId], references: [id])
+  shopeeAccount ShopeeAccount @relation(fields: [shopeeAccountId], references: [id])
+
+  @@index([userId, postedAt])
+  @@index([videoId])
+  @@index([shopeeAccountId, postedAt])
 }

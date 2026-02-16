@@ -253,6 +253,18 @@ If `npm run fix:sdk54` is missing, your ZIP is older than this fix. Re-download 
 
 ---
 
+## Development progress (latest)
+- ✅ Mobile now includes functional tabs for: Auth, Accounts, Creators, Videos, Review Queue, and Dashboard.
+- ✅ Backend now supports automatic mock product matching on every imported video.
+- ✅ Added review-queue endpoints, confirm/reanalyze actions, posting endpoint with daily-limit enforcement, and dashboard summary endpoint.
+
+Key new backend routes:
+- `GET /dashboard/summary`
+- `GET /videos/review-queue`
+- `POST /videos/:id/confirm-match`
+- `POST /videos/:id/reanalyze`
+- `POST /videos/:id/post`
+
 ## Current stack
 - Mobile: React Native (Expo)
 - Backend: Node.js + Express + Prisma

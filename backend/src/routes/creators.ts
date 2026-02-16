@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { AuthRequest } from "../middleware/auth";
 import { generateMockCreatorVideoUrls, mockDownloadTikTokVideo } from "../services/mockIntegrations";
+import { autoMatchVideo } from "../services/videoMatching";
 
 const router = Router();
 
@@ -53,7 +54,11 @@ router.post("/:id/check", async (req: AuthRequest, res) => {
         watermarkRemoved: downloaded.watermarkRemoved,
       },
     });
-    created.push(video);
+
+    await autoMatchVideo(req.userId!, video.id, video.sourceUrl);
+
+    const enriched = await prisma.video.findUnique({ where: { id: video.id }, include: { productMatch: true } });
+    if (enriched) created.push(enriched);
   }
 
   await prisma.creator.update({ where: { id: creator.id }, data: { lastCheckedAt: new Date() } });

@@ -5,6 +5,7 @@ import authRoutes from "./routes/auth";
 import accountRoutes from "./routes/accounts";
 import creatorRoutes from "./routes/creators";
 import videoRoutes from "./routes/videos";
+import dashboardRoutes from "./routes/dashboard";
 import { requireAuth } from "./middleware/auth";
 
 const app = express();
@@ -16,6 +17,7 @@ app.use("/auth", authRoutes);
 app.use("/accounts", requireAuth, accountRoutes);
 app.use("/creators", requireAuth, creatorRoutes);
 app.use("/videos", requireAuth, videoRoutes);
+app.use("/dashboard", requireAuth, dashboardRoutes);
 
 app.listen(config.port, () => {
   console.log(`ShopeePilot backend running on :${config.port}`);
