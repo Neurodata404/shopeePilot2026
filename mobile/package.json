@@ -1,0 +1,24 @@
+{
+  "name": "shopeepilot-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "npm run doctor:sdk && expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "start:tunnel": "npm run doctor:sdk && expo start --tunnel",
+    "doctor:sdk": "node scripts/doctor-sdk.js",
+    "tunnel": "npm run start:tunnel",
+    "start-tunnel": "npm run start:tunnel",
+    "fix:sdk54": "node scripts/fix-sdk54.js"
+  },
+  "dependencies": {
+    "expo": "~54.0.33",
+    "expo-asset": "~12.0.12",
+    "expo-status-bar": "~3.0.9",
+    "react": "19.1.0",
+    "react-native": "0.81.5"
+  }
+}
