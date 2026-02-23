@@ -2,7 +2,13 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { AuthRequest } from "../middleware/auth";
-import { estimateProfit, generateAffiliateLink, generateCaption, mockDownloadTikTokVideo } from "../services/mockIntegrations";
+import {
+  estimateProfit,
+  generateAffiliateLink,
+  generateCaption,
+  getMockAlternativeProducts,
+  mockDownloadTikTokVideo,
+} from "../services/mockIntegrations";
 import { autoMatchVideo } from "../services/videoMatching";
 
 const router = Router();
@@ -49,6 +55,23 @@ router.post("/intake", async (req: AuthRequest, res) => {
 
   const enriched = await prisma.video.findUnique({ where: { id: video.id }, include: { productMatch: true } });
   res.status(201).json(enriched);
+});
+
+router.get("/:id/alternatives", async (req: AuthRequest, res) => {
+  const video = await prisma.video.findFirst({
+    where: { id: req.params.id, userId: req.userId },
+    include: { productMatch: true },
+  });
+
+  if (!video || !video.productMatch) {
+    return res.status(404).json({ error: "Video or product match not found" });
+  }
+
+  const alternatives = getMockAlternativeProducts(video.productMatch.category).filter(
+    (item) => item.productName !== video.productMatch!.productName,
+  );
+
+  return res.json({ alternatives });
 });
 
 router.get("/review-queue", async (req: AuthRequest, res) => {

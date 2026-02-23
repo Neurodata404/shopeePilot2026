@@ -56,3 +56,21 @@ export function estimateProfit(commissionPercent: number): number {
   const profit = (baseSale * commissionPercent) / 100;
   return Number(profit.toFixed(2));
 }
+
+
+export function getMockAlternativeProducts(category?: string): Array<{ productName: string; category: string; commission: number; shopeeUrl: string }> {
+  const candidates = category
+    ? MOCK_PRODUCTS.filter((p) => p.category.toLowerCase() === category.toLowerCase())
+    : MOCK_PRODUCTS;
+  const pool = candidates.length > 0 ? candidates : MOCK_PRODUCTS;
+
+  return pool.slice(0, 3).map((product) => {
+    const slug = product.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    return {
+      productName: product.name,
+      category: product.category,
+      commission: product.commission,
+      shopeeUrl: `https://shopee.sg/product/mock-${slug}`,
+    };
+  });
+}

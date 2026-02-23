@@ -36,6 +36,13 @@ type Video = {
   importedAt?: string;
   productMatch?: ProductMatch | null;
 };
+type AlternativeProduct = {
+  productName: string;
+  category: string;
+  commission: number;
+  shopeeUrl: string;
+};
+
 type DashboardSummary = {
   totals: {
     totalVideos: number;
@@ -94,6 +101,7 @@ export default function App() {
   const [videos, setVideos] = useState<Video[]>([]);
   const [reviewQueue, setReviewQueue] = useState<Video[]>([]);
   const [dashboard, setDashboard] = useState<DashboardSummary | null>(null);
+  const [alternatives, setAlternatives] = useState<Record<string, AlternativeProduct[]>>({});
 
   const isLoggedIn = Boolean(token);
 
@@ -335,6 +343,39 @@ export default function App() {
     }
   }
 
+
+  async function loadAlternatives(videoId: string) {
+    try {
+      const data = await callApi(`/videos/${videoId}/alternatives`, { headers: buildAuthHeaders() });
+      setAlternatives((prev) => ({ ...prev, [videoId]: data.alternatives ?? [] }));
+    } catch (e) {
+      Alert.alert("Alternatives failed", extractError((e as Error).message));
+    }
+  }
+
+  async function pickAlternative(videoId: string) {
+    const options = alternatives[videoId] ?? [];
+    if (options.length === 0) {
+      await loadAlternatives(videoId);
+      return;
+    }
+
+    const choice = options[0];
+    try {
+      await callApi(`/videos/${videoId}/confirm-match`, {
+        method: "POST",
+        headers: buildAuthHeaders(),
+        body: JSON.stringify(choice),
+      });
+      await loadVideos();
+      await loadReviewQueue();
+      await loadDashboard();
+      Alert.alert("Updated", `Using alternative: ${choice.productName}`);
+    } catch (e) {
+      Alert.alert("Alternative failed", extractError((e as Error).message));
+    }
+  }
+
   async function loadDashboard(tokenOverride?: string) {
     if (!tokenOverride && !isLoggedIn) return;
     try {
@@ -505,10 +546,18 @@ export default function App() {
                     <Pressable style={styles.smallButton} onPress={() => confirmMatch(item.id)}>
                       <Text style={styles.smallButtonText}>Confirm Match</Text>
                     </Pressable>
+                    <Pressable style={styles.smallButtonAlt} onPress={() => pickAlternative(item.id)}>
+                      <Text style={styles.smallButtonAltText}>Pick Alternative</Text>
+                    </Pressable>
                     <Pressable style={styles.smallButtonWarn} onPress={() => reanalyze(item.id)}>
                       <Text style={styles.smallButtonWarnText}>Re-analyze</Text>
                     </Pressable>
                   </View>
+                  {(alternatives[item.id] ?? []).length > 0 && (
+                    <Text style={styles.helper}>
+                      Alternative ready: {(alternatives[item.id] ?? [])[0]?.productName}
+                    </Text>
+                  )}
                 </View>
               )}
             />
@@ -603,6 +652,15 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   smallButtonText: { color: "#1d4ed8", fontWeight: "700", fontSize: 12 },
+  smallButtonAlt: {
+    alignSelf: "flex-start",
+    backgroundColor: "#dcfce7",
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    marginTop: 4,
+  },
+  smallButtonAltText: { color: "#166534", fontWeight: "700", fontSize: 12 },
   smallButtonWarn: {
     alignSelf: "flex-start",
     backgroundColor: "#fee2e2",
